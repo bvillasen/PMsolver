@@ -24,11 +24,11 @@ Ly = y_max - y_min
 Lz = z_max - z_min
 
 #Grid Properties
-nPoints = 128
-nCells_x = nPoints
-nCells_y = nPoints
-nCells_z = nPoints
-nCells = nCells_x*nCells_y*nCells_z
+const nPoints = 128
+const nCells_x = nPoints
+const nCells_y = nPoints
+const nCells_z = nPoints
+const nCells = nCells_x*nCells_y*nCells_z
 
 dx = Lx / nCells_x
 dy = Ly / nCells_y
@@ -63,35 +63,41 @@ end
 rho *= dx*dy*dz
 
 # Get the potential from Density
-# fft_kx = 2*pi/Lx * linspace(0, nCells_x-1, nCells_x)
-# fft_ky = 2*pi/Ly * linspace(0, nCells_y-1, nCells_y)
-# fft_kz = 2*pi/Lz * linspace(0, nCells_z-1, nCells_z)
+fft_kx = 2*pi/Lx * linspace(0, nCells_x-1, nCells_x)
+fft_ky = 2*pi/Ly * linspace(0, nCells_y-1, nCells_y)
+fft_kz = 2*pi/Lz * linspace(0, nCells_z-1, nCells_z)
 
-fft_kx = sin( pi/Lx * linspace(0, nCells_x-1, nCells_x) ).^2
-fft_ky = sin( pi/Ly * linspace(0, nCells_y-1, nCells_y) ).^2
-fft_kz = sin( pi/Lz * linspace(0, nCells_z-1, nCells_z) ).^2
+# fft_kx = sin( pi/Lx * linspace(0, nCells_x-1, nCells_x) ).^2
+# fft_ky = sin( pi/Ly * linspace(0, nCells_y-1, nCells_y) ).^2
+# fft_kz = sin( pi/Lz * linspace(0, nCells_z-1, nCells_z) ).^2
 
 
-# FFTW.set_num_threads(1)
+FFTW.set_num_threads(8)
 fft_plan_fwd = plan_fft( rho, flags=FFTW.ESTIMATE, timelimit=20 )
-#Apply FFT to rho
-# tic()
-# for k = 1:1000
-#   rho_trans = fft_plan_fwd * rho
-# end
-# time = toc()
+# Apply FFT to rho
 rho_trans = fft_plan_fwd * rho
+tic()
+for k = 1:100
+  rho_trans = fft_plan_fwd * rho
+end
+time = toc()
+
+tic()
 for i in 1:nCells_x
+  sin_kx = fft_kx[i]
   for j in 1:nCells_y
+    sin_ky = fft_ky[j]
     for k in 1:nCells_z
       if i==1 && j==1 && k == 1
         rho_trans[1,1,1] = 0
         continue
       end
-      sin_kx, sin_ky, sin_kz = fft_kx[i], fft_ky[j], fft_kz[k]
+      # kx, ky, kz = fft_kx[i], fft_ky[j], fft_kz[k]
       # G = -1/ ( sin(kx/2)^2 + sin(ky/2)^2 + sin(kz/2)^2 )
+      sin_kz =  fft_kz[k]
       G = -1/ ( sin_kx + sin_ky + sin_kz )
       rho_trans[k, j, i] *= G
     end
   end
 end
+time=toc()
