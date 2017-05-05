@@ -20,14 +20,14 @@ function getIntFromArgument( inStr, findStr )
   return val
 end
 
-function writeSnapshot( n, name, data, outFile; stride=1)
-  snapNumber = n < 10 ? "0$n" : "$n"
-  snapNumber = n < 100 ? "0$snapNumber" : snapNumber
-  key = name * "_snap_" * snapNumber
-  # println( key )
-  # outFile[ key, "chunk", (4,4,4), "blosc", 3] = data[1:stride:end,1:stride:end,1:stride:end]
-  outFile[ key ] = map( Float32, data[1:stride:end,1:stride:end,1:stride:end] )
-end
+# function writeSnapshot( n, name, data, outFile; stride=1)
+#   snapNumber = n < 10 ? "0$n" : "$n"
+#   snapNumber = n < 100 ? "0$snapNumber" : snapNumber
+#   key = name * "_snap_" * snapNumber
+#   # println( key )
+#   # outFile[ key, "chunk", (4,4,4), "blosc", 3] = data[1:stride:end,1:stride:end,1:stride:end]
+#   outFile[ key ] = map( Float32, data[1:stride:end,1:stride:end,1:stride:end] )
+# end
 
 function *(n::Int64, s::String)
   r = ""
