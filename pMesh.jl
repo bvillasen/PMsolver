@@ -8,7 +8,7 @@ using tools
 
 
 const nParticles = 128^3
-const totalSteps = 100
+const totalSteps = 500
 const dt = 0.02
 
 
@@ -64,6 +64,8 @@ p_vel_x = zeros( nParticles )
 p_vel_y = zeros( nParticles )
 p_vel_z = zeros( nParticles )
 
+
+
 #Array for particles inside the box
 p_inside = ones( Bool, nParticles )
 function get_particles_outside( p_inside, p_pos_x, p_pos_y, p_pos_z,
@@ -101,7 +103,7 @@ end
 
 writeSnapshot( 0, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=8 )
 
-function get_density_NPG( p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
+function get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
   #Density array
   rho = zeros( nCells_z, nCells_y, nCells_x )
   #Get Density Nearest Grid Point NGP
@@ -109,6 +111,9 @@ function get_density_NPG( p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_
   idxs_y = floor( Int, p_pos_y/dy ) + 1
   idxs_z = floor( Int, p_pos_z/dz ) + 1
   for i in 1:nParticles
+    if !p_inside[i]
+      continue
+    end
     idx_x, idx_y, idx_z = idxs_x[i], idxs_y[i], idxs_z[i]
     rho[idx_z, idx_y, idx_x] += 1
   end
@@ -129,7 +134,7 @@ end
 
 
 
-function get_grav_force_NPG( phi, idx_x, idx_y, idx_z )
+function get_grav_force_NGP( phi, idx_x, idx_y, idx_z )
   # X Force component
   phi_l = idx_x > 1 ? phi[idx_z, idx_y, idx_x-1] : phi[idx_z, idx_y, end ]
   phi_r = idx_x < nCells_x ? phi[idx_z, idx_y, idx_x+1] : phi[idx_z, idx_y, 1 ]
@@ -180,12 +185,15 @@ function initialize_FFT( nCells_x, nCells_y, nCells_z, Lx, Ly, Lz, dx, dy, dz )
   return [ G, fft_plan_fwd, fft_plan_bkwd ]
 end
 
-function update_particles_NPG( dt, phi, idxs_x, idxs_y, idxs_z,
+function update_particles_NGP( dt, phi, idxs_x, idxs_y, idxs_z, p_inside,
                                p_pos_x, p_pos_y, p_pos_z,
                                p_vel_x, p_vel_y, p_vel_z,  )
   for i in 1:nParticles
+    if !p_inside[i]
+      continue
+    end
     idx_x, idx_y, idx_z = idxs_x[i], idxs_y[i], idxs_z[i]
-    g_x, g_y, g_z = get_grav_force_NPG( phi, idx_x, idx_y, idx_z )
+    g_x, g_y, g_z = get_grav_force_NGP( phi, idx_x, idx_y, idx_z )
     update_leapfrog( i, dt, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, g_x, g_y, g_z )
   end
 end
@@ -193,22 +201,29 @@ end
 
 G, fft_plan_fwd, fft_plan_bkwd = initialize_FFT( nCells_x, nCells_y, nCells_z, Lx, Ly, Lz, dx, dy, dz )
 
-function advance_step_NPG( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz,
+function advance_step_NGP( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside,
                            p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,
                            G, fft_plan_fwd, fft_plan_bkwd )
-  rho, idxs_x, idxs_y, idxs_z = get_density_NPG( p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
+  get_particles_outside( p_inside, p_pos_x, p_pos_y, p_pos_z, x_min, x_max, y_min, y_max, z_min, z_max)
+  rho, idxs_x, idxs_y, idxs_z = get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
   phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
-  update_particles_NPG( dt, phi, idxs_x, idxs_y, idxs_z, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  )
-  # if ( mod( nStep, 10  ) == 0 )
-  #   cut = Int(nCells_z/2)
-  #   img = rho[cut,:,:]
-  #   clf()
-  #   imshow(img)
-  #   colorbar()
-  #   title( "Density" )
-  #   savefig("images/density_$(nStep).png")
-  #
-  # end
+  update_particles_NGP( dt, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  )
+  if ( mod( nStep, 2  ) == 0 )
+    cut = Int(nCells_z/2)
+    img = log( 1e6*rho[cut,:,:] + 1 )
+    clf()
+    imshow(img)
+    colorbar()
+    title( "Density" )
+    savefig("images/density_$(nStep/2 -1 ).png")
+    img = phi[cut,:,:]
+    clf()
+    imshow(img)
+    colorbar()
+    title( "Potential" )
+    savefig("images/potential_$(nStep/2 -1 ).png")
+
+  end
 end
 
 
@@ -218,7 +233,7 @@ time_total = 0
 stepsPerWrite = 10
 for nStep in 1:totalSteps
   printProgress( nStep-1, totalSteps, time_total)
-  time_step = @elapsed advance_step_NPG( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  G, fft_plan_fwd, fft_plan_bkwd )
+  time_step = @elapsed advance_step_NGP( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  G, fft_plan_fwd, fft_plan_bkwd )
   time_total += time_step
   if ( mod( nStep, stepsPerWrite  ) == 0 )
     writeSnapshot( nStep, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=8 )
