@@ -8,21 +8,24 @@ using tools
 
 
 const nParticles = 128^3
-const totalSteps = 500
-const dt = 0.02
+const totalSteps = 250
+const dt = 0.002
 
 
-G    = 1 #m**2/(kg*s**2)
-mSun = 1     #kg
-pMass = 1
+const Gconst    = 1 #m**2/(kg*s**2)
+const mSun = 1     #kg
+const pMass = 1
 
 #Domain Parameters
-x_min, x_max = 0.0, 1.0
-y_min, y_max = 0.0, 1.0
-z_min, z_max = 0.0, 1.0
-Lx = x_max - x_min
-Ly = y_max - y_min
-Lz = z_max - z_min
+const x_min = 0.0
+const y_min = 0.0
+const z_min = 0.0
+const x_max = 1.0
+const y_max = 1.0
+const z_max = 1.0
+const Lx = x_max - x_min
+const Ly = y_max - y_min
+const Lz = z_max - z_min
 
 #Grid Properties
 const nPoints = 128
@@ -31,9 +34,9 @@ const nCells_y = nPoints
 const nCells_z = nPoints
 const nCells = nCells_x*nCells_y*nCells_z
 
-dx = Lx / nCells_x
-dy = Ly / nCells_y
-dz = Lz / nCells_z
+const dx = Lx / nCells_x
+const dy = Ly / nCells_y
+const dz = Lz / nCells_z
 
 #Cells positions in grid ( mid-point )
 c_pos_x = linspace( x_min + dx/2, x_max - dx/2, nCells_x)
@@ -63,6 +66,26 @@ p_pos_z = initialR .* cos(initialPhi) + center_z
 p_vel_x = zeros( nParticles )
 p_vel_y = zeros( nParticles )
 p_vel_z = zeros( nParticles )
+
+dx_all = zeros( nParticles )
+dy_all = zeros( nParticles )
+dz_all = zeros( nParticles )
+
+
+# #Cloud-in-Cell density interpolation
+# #First get  Nearest Grid Point NGP
+# idxs_x = floor( Int, p_pos_x/dx ) + 1
+# idxs_y = floor( Int, p_pos_y/dy ) + 1
+# idxs_z = floor( Int, p_pos_z/dz ) + 1
+# for i in 1:nParticles
+#   dx_all[i] = p_pos_x[i] - c_pos_x[idxs_x[i]]
+#   dy_all[i] = p_pos_y[i] - c_pos_y[idxs_y[i]]
+#   dz_all[i] = p_pos_z[i] - c_pos_z[idxs_z[i]]
+# end
+
+
+
+
 
 
 
@@ -123,7 +146,7 @@ end
 
 function get_potential( density, G, fft_plan_f, fft_plan_b)
   # Apply FFT to rho
-  rho_trans = fft_plan_f * density
+  rho_trans = fft_plan_f * (4*pi*Gconst * density)
   rho_trans = G .* rho_trans
   rho_trans[1] = 0
   # Apply inverse FFTW
@@ -208,22 +231,21 @@ function advance_step_NGP( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_in
   rho, idxs_x, idxs_y, idxs_z = get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
   phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
   update_particles_NGP( dt, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  )
-  if ( mod( nStep, 2  ) == 0 )
-    cut = Int(nCells_z/2)
-    img = log( 1e6*rho[cut,:,:] + 1 )
-    clf()
-    imshow(img)
-    colorbar()
-    title( "Density" )
-    savefig("images/density_$(nStep/2 -1 ).png")
-    img = phi[cut,:,:]
-    clf()
-    imshow(img)
-    colorbar()
-    title( "Potential" )
-    savefig("images/potential_$(nStep/2 -1 ).png")
-
-  end
+  # if ( mod( nStep, 2  ) == 0 )
+  #   cut = Int(nCells_z/2)
+  #   img = log( 1e6*rho[cut,:,:] + 1 )
+  #   clf()
+  #   imshow(img)
+  #   colorbar()
+  #   title( "Density" )
+  #   savefig("images/density_$(nStep/2 -1 ).png")
+  #   img = phi[cut,:,:]
+  #   clf()
+  #   imshow(img)
+  #   colorbar()
+  #   title( "Potential" )
+  #   savefig("images/potential_$(nStep/2 -1 ).png")
+  # end
 end
 
 
@@ -244,73 +266,3 @@ println("\nTotal Time: $(time_total) secs")
 toc()
 
 close( outFile )
-
-
-
-
-
-
-
-
-
-# tic()
-# for i in 1:nParticles
-#   idx_x, idx_y, idx_z = idxs_x[i], idxs_y[i], idxs_z[i]
-#   # X Force component
-#   phi_l = idx_x > 1 ? phi[idx_z, idx_y, idx_x-1] : phi[idx_z, idx_y, end ]
-#   phi_r = idx_x < nCells_x ? phi[idx_z, idx_y, idx_x+1] : phi[idx_z, idx_y, 1 ]
-#   g_x = -( phi_r - phi_l ) / ( 2*dx )
-#   # Y Force component
-#   phi_d = idx_y > 1 ? phi[idx_z, idx_y-1, idx_x] : phi[idx_z, end, idx_x ]
-#   phi_u = idx_y < nCells_y ? phi[idx_z, idx_y+1, idx_x] : phi[idx_z, 1, idx_x ]
-#   g_y = -( phi_u - phi_d ) / ( 2*dy )
-#   # Z Force component
-#   phi_b = idx_z > 1 ? phi[idx_z-1, idx_y, idx_x] : phi[end, idx_y, idx_x ]
-#   phi_t = idx_z < nCells_z ? phi[idx_z+1, idx_y, idx_x] : phi[1, idx_y, idx_x ]
-#   g_z = -( phi_t - phi_b ) / ( 2*dz )
-#
-#   # Leapfrog
-#   #Update velocities using current forces
-#   p_vel_x[i] = p_vel_x[i] + dt*g_x
-#   p_vel_y[i] = p_vel_y[i] + dt*g_y
-#   p_vel_z[i] = p_vel_z[i] + dt*g_z
-#   #Update positions using updated velocities
-#   p_pos_x[i] = p_pos_x[i] = dt*p_vel_x[i]
-#   p_pos_y[i] = p_pos_y[i] = dt*p_vel_y[i]
-#   p_pos_z[i] = p_pos_z[i] = dt*p_vel_z[i]
-# end
-# toc()
-
-
-
-
-
-
-
-
-
-#
-# cut = Int(nCells_z/2)
-# img = phi[cut,:,:]
-# imshow(img)
-# savefig("potential.png")
-#
-
-
-
-
-
-
-
-# tic()
-# phi_r = phi[:,:,3:end ]
-# phi_l = phi[:,:,1:end-2 ]
-# g_x[:,:,2:end-1] = phi_r - phi_l
-# g_x[:,:,1] = phi[:,:,2 ] - phi[:,:,end ]
-# g_x[:,:,end] = phi[:,:,1 ] - phi[:,:,end-1 ]
-# g_x = g_x/( 2*dx )
-# toc()
-#
-# phi_u = phi[:,3:end,:]
-# phi_d = phi[:,1:end-2,:]
-# g_x[:,2:end-1,:] = phi_u - phi_d
