@@ -78,32 +78,36 @@ p_vel_z = zeros( nParticles )
 # p_vel_x = [ 0. 0. ]
 # p_vel_y = [ v_circ -v_circ ]
 # p_vel_z = [ 0. 0. ]
+#########################################################################
+
+g_x_grid = zeros( nCells_z, nCells_y, nCells_x )
+g_y_grid = zeros( nCells_z, nCells_y, nCells_x )
+g_z_grid = zeros( nCells_z, nCells_y, nCells_x )
+
+function get_grav_force_grid( phi, dx, dy, dz, nx, ny, nz, g_x, g_y, g_z )
+  for i in 1:nx
+    for j in 1:ny
+      for k in 1:nz
+        phi_l = i>1  ? phi[k,j,i-1] : phi[k,j,end]
+        phi_r = i<nx ? phi[k,j,i+1] : phi[k,j,1]
+
+        phi_d = j>1  ? phi[k,j-1,i] : phi[k,end,i]
+        phi_u = j<ny ? phi[k,j+1,i] : phi[k,1,i]
+
+        phi_b = k>1  ? phi[k-1,j,i] : phi[end,j,i]
+        phi_t = k<nz ? phi[k+1,j,i] : phi[1,j,i]
+
+        g_x[k,j,i] = -0.5*( phi_r - phi_l ) / dx
+        g_y[k,j,i] = -0.5*( phi_u - phi_d ) / dy
+        g_z[k,j,i] = -0.5*( phi_t - phi_b ) / dz
+      end
+    end
+  end
+end
 
 
 
 
-
-
-dx_all = zeros( nParticles )
-dy_all = zeros( nParticles )
-dz_all = zeros( nParticles )
-
-
-# #Cloud-in-Cell density interpolation
-# #First get  Nearest Grid Point NGP
-# function get_
-# idxs_x = floor( Int, (p_pos_x - dx/2)/dx ) + 1
-# idxs_y = floor( Int, (p_pos_y - dy/2)/dy ) + 1
-# idxs_z = floor( Int, (p_pos_z - dz/2)/dz ) + 1
-# inside_x = idxs_x .> x_min
-# inside_y = idxs_y .> y_min
-# inside_z = idxs_z .> z_min
-# p_inside = inside_z .* inside_y .* inside_x
-# for i in 1:nParticles
-#   dx_all[i] = p_pos_x[i] - c_pos_x[idxs_x[i]]
-#   dy_all[i] = p_pos_y[i] - c_pos_y[idxs_y[i]]
-#   dz_all[i] = p_pos_z[i] - c_pos_z[idxs_z[i]]
-# end
 
 
 
@@ -236,7 +240,77 @@ function get_potential( density, G, fft_plan_f, fft_plan_b)
 end
 
 
-function get_grav_force_CIC( phi, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
+function get_grav_force_CIC_grid( phi, g_x_grid, g_y_grid, g_z_grid, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
+  delta_x = 1 - (p_pos_x[i] - c_pos_x[idx_x])/dx
+  delta_y = 1 - (p_pos_y[i] - c_pos_y[idx_y])/dy
+  delta_z = 1 - (p_pos_z[i] - c_pos_z[idx_z])/dz
+
+  #FOR bottom-left cell
+  g_x_bl = g_x_grid[idx_z, idx_y, idx_x]
+  g_y_bl = g_y_grid[idx_z, idx_y, idx_x]
+  g_z_bl = g_z_grid[idx_z, idx_y, idx_x]
+
+  #FOR bottom-right
+  g_x_br = g_x_grid[idx_z, idx_y, idx_x+1]
+  g_y_br = g_y_grid[idx_z, idx_y, idx_x+1]
+  g_z_br = g_z_grid[idx_z, idx_y, idx_x+1]
+
+  #FOR bottom-up
+  g_x_bu = g_x_grid[idx_z, idx_y+1, idx_x]
+  g_y_bu = g_y_grid[idx_z, idx_y+1, idx_x]
+  g_z_bu = g_z_grid[idx_z, idx_y+1, idx_x]
+
+  #FOR bottom-right-up
+  g_x_bru = g_x_grid[idx_z, idx_y+1, idx_x+1]
+  g_y_bru = g_y_grid[idx_z, idx_y+1, idx_x+1]
+  g_z_bru = g_z_grid[idx_z, idx_y+1, idx_x+1]
+
+  #FOR top-left
+  # X Force component
+  g_x_tl = g_x_grid[idx_z+1, idx_y, idx_x]
+  g_y_tl = g_y_grid[idx_z+1, idx_y, idx_x]
+  g_z_tl = g_z_grid[idx_z+1, idx_y, idx_x]
+
+  #FOR top-right
+  g_x_tr = g_x_grid[idx_z+1, idx_y, idx_x+1]
+  g_y_tr = g_y_grid[idx_z+1, idx_y, idx_x+1]
+  g_z_tr = g_z_grid[idx_z+1, idx_y, idx_x+1]
+
+  #FOR top-up
+  g_x_tu = g_x_grid[idx_z+1, idx_y+1, idx_x]
+  g_y_tu = g_y_grid[idx_z+1, idx_y+1, idx_x]
+  g_z_tu = g_z_grid[idx_z+1, idx_y+1, idx_x]
+
+
+  #FOR top-right-up
+  g_x_tru = g_x_grid[idx_z+1, idx_y+1, idx_x+1]
+  g_y_tru = g_y_grid[idx_z+1, idx_y+1, idx_x+1]
+  g_z_tru = g_z_grid[idx_z+1, idx_y+1, idx_x+1]
+
+
+  g_x = g_x_bl*delta_x*delta_y*delta_z         + g_x_br*(1-delta_x)*delta_y*delta_z +
+        g_x_bu*delta_x*(1-delta_y)*delta_z     + g_x_bru*(1-delta_x)*(1-delta_y)*delta_z +
+        g_x_tl*delta_x*delta_y*(1-delta_z)     + g_x_tr*(1-delta_x)*delta_y*(1-delta_z) +
+        g_x_tu*delta_x*(1-delta_y)*(1-delta_z) + g_x_tru*(1-delta_x)*(1-delta_y)*(1-delta_z)
+
+  g_y = g_y_bl*delta_x*delta_y*delta_z         + g_y_br*(1-delta_x)*delta_y*delta_z +
+        g_y_bu*delta_x*(1-delta_y)*delta_z     + g_y_bru*(1-delta_x)*(1-delta_y)*delta_z +
+        g_y_tl*delta_x*delta_y*(1-delta_z)     + g_y_tr*(1-delta_x)*delta_y*(1-delta_z) +
+        g_y_tu*delta_x*(1-delta_y)*(1-delta_z) + g_y_tru*(1-delta_x)*(1-delta_y)*(1-delta_z)
+
+  g_z = g_z_bl*delta_x*delta_y*delta_z         + g_z_br*(1-delta_x)*delta_y*delta_z +
+        g_z_bu*delta_x*(1-delta_y)*delta_z     + g_z_bru*(1-delta_x)*(1-delta_y)*delta_z +
+        g_z_tl*delta_x*delta_y*(1-delta_z)     + g_z_tr*(1-delta_x)*delta_y*(1-delta_z) +
+        g_z_tu*delta_x*(1-delta_y)*(1-delta_z) + g_z_tru*(1-delta_x)*(1-delta_y)*(1-delta_z)
+
+  return [ g_x g_y g_z ]
+end
+
+
+
+
+
+function get_grav_force_CIC_particles( phi, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
   delta_x = 1 - (p_pos_x[i] - c_pos_x[idx_x])/dx
   delta_y = 1 - (p_pos_y[i] - c_pos_y[idx_y])/dy
   delta_z = 1 - (p_pos_z[i] - c_pos_z[idx_z])/dz
@@ -414,7 +488,7 @@ function initialize_FFT( nCells_x, nCells_y, nCells_z, Lx, Ly, Lz, dx, dy, dz )
       sin_ky = fft_ky[j]
       for k in 1:nCells_z
         sin_kz =  fft_kz[k]
-        G[k,j,i] = -1/ ( sin_kx + sin_ky + sin_kz )
+        G[k,j,i] = -1/ ( sin_kx + sin_ky + sin_kz )  *dx^2/4  #NOTE: DX^2 only for dx=dy=dz
       end
     end
   end
@@ -424,13 +498,15 @@ end
 function update_particles_CIC( dt, dx, dy, dz, phi, idxs_x, idxs_y, idxs_z, p_inside,
                                p_pos_x, p_pos_y, p_pos_z,
                                p_vel_x, p_vel_y, p_vel_z,
-                               c_pos_x, c_pos_y, c_pos_z  )
+                               c_pos_x, c_pos_y, c_pos_z,
+                               g_x_grid, g_y_grid, g_z_grid  )
   for i in 1:nParticles
     if !p_inside[i]
       continue
     end
     idx_x, idx_y, idx_z = idxs_x[i], idxs_y[i], idxs_z[i]
-    g_x, g_y, g_z = get_grav_force_CIC( phi, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
+    # g_x, g_y, g_z = get_grav_force_CIC_particles( phi, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
+    g_x, g_y, g_z = get_grav_force_CIC_grid( phi, g_x_grid, g_y_grid, g_z_grid, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
     update_leapfrog( i, dt, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, g_x, g_y, g_z )
   end
 end
@@ -454,47 +530,49 @@ end
 
 
 function plot_slides( nStep, cut, rho, phi )
-  img = log( 1e-7*rho[cut,:,:] + 1 )
+  img = log( 1e-6*rho[cut,:,:] + 1 )
   clf()
   imshow(img)
   colorbar()
-  title( "Density" )
-  savefig("images/density_$(nStep/2 -1 ).png")
+  title( "Density   t = $(sim_time)" )
+  savefig("images/density_$(nStep ).png")
   img = phi[cut,:,:]
   clf()
   imshow(img)
   colorbar()
-  title( "Potential" )
-  savefig("images/potential_$(nStep/2 -1 ).png")
+  title( "Potential   t = $(sim_time)" )
+  savefig("images/potential_$(nStep ).png")
 end
 
 function advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside,
                            p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,
                            c_pos_x, c_pos_y, c_pos_z,
+                           g_x_grid, g_y_grid, g_z_grid,
                            G, fft_plan_fwd, fft_plan_bkwd )
   get_particles_outside_CIC( p_inside, p_pos_x, p_pos_y, p_pos_z, x_min, x_max, y_min, y_max, z_min, z_max, dx, dy, dz)
   rho, idxs_x, idxs_y, idxs_z = get_density_CIC( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz, c_pos_x, c_pos_y, c_pos_z )
   phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
-  update_particles_CIC( dt,  dx, dy, dz, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z  )
-  if ( mod( nStep, 2  ) == 0 )
-    plot_slides( nStep, Int(nCells_z/2), rho, phi )
+  get_grav_force_grid( phi, dx, dy, dz, nCells_x, nCells_y, nCells_z, g_x_grid, g_y_grid, g_z_grid )
+  if ( mod( nStep, 1  ) == 0 )
+    plot_slides( nStep-1, Int(nCells_z/2), rho, phi )
   end
+  update_particles_CIC( dt,  dx, dy, dz, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z, g_x_grid, g_y_grid, g_z_grid  )
 end
 
 
-
-function advance_step_NGP( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside,
-                           p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,
-                           G, fft_plan_fwd, fft_plan_bkwd )
-  get_particles_outside_NPG( p_inside, p_pos_x, p_pos_y, p_pos_z, x_min, x_max, y_min, y_max, z_min, z_max)
-  rho, idxs_x, idxs_y, idxs_z = get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
-  phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
-  update_particles_NGP( dt, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  )
-  if ( mod( nStep, 2  ) == 0 )
-    plot_slides( nStep, Int(nCells_z/2), rho, phi )
-  end
-
-end
+#
+# function advance_step_NGP( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside,
+#                            p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,
+#                            G, fft_plan_fwd, fft_plan_bkwd )
+#   get_particles_outside_NPG( p_inside, p_pos_x, p_pos_y, p_pos_z, x_min, x_max, y_min, y_max, z_min, z_max)
+#   rho, idxs_x, idxs_y, idxs_z = get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
+#   phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
+#   # if ( mod( nStep, 2  ) == 0 )
+#   #   plot_slides( nStep, Int(nCells_z/2), rho, phi )
+#   # end
+#   update_particles_NGP( dt, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z,  )
+#
+# end
 
 
 ###################################################################################
@@ -505,25 +583,41 @@ get_particles_outside_CIC( p_inside, p_pos_x, p_pos_y, p_pos_z, x_min, x_max, y_
 # rho, idxs_x, idxs_y, idxs_z = get_density_NGP( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz )
 rho, idxs_x, idxs_y, idxs_z = get_density_CIC( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz, c_pos_x, c_pos_y, c_pos_z )
 phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
+get_grav_force_grid( phi, dx, dy, dz, nCells_x, nCells_y, nCells_z, g_x_grid, g_y_grid, g_z_grid )
 for i in 1:nParticles
   if !p_inside[i]
     continue
   end
   idx_x, idx_y, idx_z = idxs_x[i], idxs_y[i], idxs_z[i]
-  g_x, g_y, g_z = get_grav_force_NGP( phi, idx_x, idx_y, idx_z )
+  # g_x, g_y, g_z = get_grav_force_CIC_particles( phi, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
+  g_x, g_y, g_z = get_grav_force_CIC_grid( phi, g_x_grid, g_y_grid, g_z_grid, dx, dy, dz, i, idx_x, idx_y, idx_z, p_pos_x, p_pos_y, p_pos_z, c_pos_x, c_pos_y, c_pos_z )
   p_vel_x[i] = p_vel_x[i] + 0.5*dt*g_x
   p_vel_y[i] = p_vel_y[i] + 0.5*dt*g_y
   p_vel_z[i] = p_vel_z[i] + 0.5*dt*g_z
 end
+
+# dens = 128^3/( 4/3*pi*R^3)
+# x_points = ( c_pos_x - 0.5 )
+# F_x = -4/3*pi*dens*Gconst*x_points
+#
+#
+# figure(0)
+# clf()
+# plot( x_points, g_x_grid[64,64,:])
+# plot( x_points, F_x)
+# show()
+#
 ##################################################################################
 # Start simulation
 tic()
+sim_time = 0
 time_total = 0
 stepsPerWrite = 10
 for nStep in 1:totalSteps
   printProgress( nStep-1, totalSteps, time_total)
-  time_step = @elapsed advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z, G, fft_plan_fwd, fft_plan_bkwd )
+  time_step = @elapsed advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z, g_x_grid, g_y_grid, g_z_grid, G, fft_plan_fwd, fft_plan_bkwd )
   time_total += time_step
+  sim_time += dt
   # if ( mod( nStep, stepsPerWrite  ) == 0 )
   #   writeSnapshot( nStep, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=8 )
   # end
