@@ -7,14 +7,21 @@ using tools
 
 
 
-const nParticles = 128^3
-const totalSteps = 3000
-const dt = 2e-10
+const nParticles = 128^3 / 8
+const totalSteps = 100
+const end_time = 6.9e-5
+const dt = end_time/totalSteps
 
 
 const Gconst    = 1 #m**2/(kg*s**2)
 const mSun = 1     #kg
 const pMass = 1
+
+
+# Output File
+outputDir = ""
+fileName =  outputDir * "test.h5"
+outFile = h5open( fileName, "w")
 
 #Domain Parameters
 const x_min = 0.0
@@ -26,6 +33,10 @@ const z_max = 1.0
 const Lx = x_max - x_min
 const Ly = y_max - y_min
 const Lz = z_max - z_min
+
+# Parameters for cosmology
+const r_0 =
+
 
 #Grid Properties
 const nPoints = 128
@@ -156,12 +167,16 @@ function get_particles_outside_NPG( p_inside, p_pos_x, p_pos_y, p_pos_z,
   end
 end
 
-outputDir = ""
-fileName =  outputDir * "p_pos.h5"
-# outFile = h5open( fileName, "w")
-
 function writeSnapshot( n, name, data, outFile; stride=1)
-  snapNumber = n < 100 ? "0$(n)" : "$(n)"
+  if n < 1000
+    snapNumber = "0$(n)"
+  end
+  if n < 100
+    snapNumber = "00$(n)"
+  end
+  if n < 10
+    snapNumber = "000$(n)"
+  end
   key = name * snapNumber
   pos_x, pos_y, pos_z = data
   outFile[ key * "_pos_x" ] = map( Float32, pos_x[1:stride:end] )
@@ -169,7 +184,7 @@ function writeSnapshot( n, name, data, outFile; stride=1)
   outFile[ key * "_pos_z" ] = map( Float32, pos_z[1:stride:end] )
 end
 
-# writeSnapshot( 0, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=8 )
+writeSnapshot( 0, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=1 )
 
 function get_indxs_CIC( dx, dy, dz, p_pos_x, p_pos_y, p_pos_z )
   idxs_x = floor( Int, (p_pos_x - 0.5*dx)/dx ) + 1
@@ -535,13 +550,13 @@ function plot_slides( nStep, cut, rho, phi )
   imshow(img)
   colorbar()
   title( "Density   t = $(sim_time)" )
-  savefig("images/density_$(nStep ).png")
+  savefig("images/density_$(Int(nStep/10) ).png")
   img = phi[cut,:,:]
   clf()
   imshow(img)
   colorbar()
   title( "Potential   t = $(sim_time)" )
-  savefig("images/potential_$(nStep ).png")
+  savefig("images/potential_$(Int(nStep/10) ).png")
 end
 
 function advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside,
@@ -553,7 +568,7 @@ function advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_in
   rho, idxs_x, idxs_y, idxs_z = get_density_CIC( p_inside, p_pos_x, p_pos_y, p_pos_z, nCells_x, nCells_y, nCells_z, dx, dy, dz, c_pos_x, c_pos_y, c_pos_z )
   phi = get_potential( rho, G, fft_plan_fwd, fft_plan_bkwd)
   get_grav_force_grid( phi, dx, dy, dz, nCells_x, nCells_y, nCells_z, g_x_grid, g_y_grid, g_z_grid )
-  if ( mod( nStep, 1  ) == 0 )
+  if ( mod( nStep-1, 10  ) == 0 )
     plot_slides( nStep-1, Int(nCells_z/2), rho, phi )
   end
   update_particles_CIC( dt,  dx, dy, dz, phi, idxs_x, idxs_y, idxs_z, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z, g_x_grid, g_y_grid, g_z_grid  )
@@ -618,12 +633,12 @@ for nStep in 1:totalSteps
   time_step = @elapsed advance_step_CIC( nStep, nCells_x, nCells_y, nCells_z, dx, dy, dz, p_inside, p_pos_x, p_pos_y, p_pos_z, p_vel_x, p_vel_y, p_vel_z, c_pos_x, c_pos_y, c_pos_z, g_x_grid, g_y_grid, g_z_grid, G, fft_plan_fwd, fft_plan_bkwd )
   time_total += time_step
   sim_time += dt
-  # if ( mod( nStep, stepsPerWrite  ) == 0 )
-  #   writeSnapshot( nStep, "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=8 )
-  # end
+  if ( mod( nStep, stepsPerWrite  ) == 0 )
+    writeSnapshot( Int(nStep/stepsPerWrite), "", [p_pos_x, p_pos_y, p_pos_z], outFile, stride=1 )
+  end
 end
 printProgress( totalSteps, totalSteps, time_total)
 println("\nTotal Time: $(time_total) secs")
 toc()
 
-# close( outFile )
+close( outFile )
